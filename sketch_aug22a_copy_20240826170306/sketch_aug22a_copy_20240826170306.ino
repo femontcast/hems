@@ -3,17 +3,20 @@
 #include <Adafruit_BME280.h>
 #include <ESP32Time.h>  //Libreria para usar el timer
 
-ESP32Time rtc; 
+ESP32Time rtc(-21600); 
 
+hw_timer_t *timer = NULL;
 
 #define SEALEVELPRESSURE_HPA (1013.25)
-#define TIMER_INTERVAL 1000 // Intervalo de tiempo en milisegundos (1 segundo)
 
 Adafruit_BME280 bme1; // I2C
 Adafruit_BME280 bme2; // I2C
 
-unsigned long previousMillis = 0; // Almacena el último momento en que se actualizó
-bool timer_flag = false; // Bandera para controlar la temporización
+bool timer_flag = true;
+
+void ARDUINO_ISR_ATTR onTimer() {
+  timer_flag = true;
+}
 
 void setup() {
   Serial.begin(9600);
@@ -29,37 +32,29 @@ void setup() {
     while (1);
   }
 
-  Serial.println("-- Default Test --");
+  // Set timer frequency to 1Mhz
+  timer = timerBegin(1000000);
+
+  // Attach onTimer function to our timer.
+  timerAttachInterrupt(timer, &onTimer);
+
+  // Set alarm to call onTimer function every second (value in microseconds).
+  // Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
+  timerAlarm(timer, 1000000, true, 0);
 }
 
 void loop() {
-  unsigned long currentMillis = millis(); // Obtiene el tiempo actual
-
-  
-  // Comprueba si ha pasado el intervalo
-  if (currentMillis - previousMillis >= TIMER_INTERVAL) {
-    // Actualiza el último tiempo y establece la bandera
-    previousMillis = currentMillis;
-    timer_flag = true;
-  }
-
   // Ejecuta la función de impresión si la bandera está activa
   if (timer_flag) {
-    printTime();
-    printValues();
-    
+    printValues();    
     timer_flag = false; // Resetea la bandera
   }
 }
-void printTime() {
-  String now = rtc.getTime("%A, %B %d %Y %H:%M:%S");
-  Serial.println(now);
 
-}
 void printValues() {
   // Imprime los datos del Sensor 1
-  
-  
+  String now = rtc.getTime("%Y-%m-%d %H:%M:%S,");
+  Serial.print(now);
   Serial.print("1,"); // Identificador del sensor
   Serial.print(bme1.readTemperature()); // Temperatura
   Serial.print(","); 
@@ -67,8 +62,8 @@ void printValues() {
   Serial.print(",");
   Serial.print(bme1.readHumidity()); // Humedad
   Serial.println(); // Finaliza la línea
-
   // Imprime los datos del Sensor 2
+  Serial.print(now);
   Serial.print("2,"); // Identificador del sensor
   Serial.print(bme2.readTemperature()); // Temperatura
   Serial.print(","); 
