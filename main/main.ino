@@ -2,6 +2,18 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <ESP32Time.h>  //Libreria para usar el timer
+#include <WiFi.h>
+
+#define DEBUG false
+
+// Definición de la red WiFi
+const char* ssid = "LaboratorioDelta";   // Tu red WiFi SSID
+const char* password = "labdelta21!";    // Tu contraseña WiFi
+
+// NTP server
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 0;  // GMT -6
+const int daylightOffset_sec = 0;
 
 ESP32Time rtc(-21600); 
 
@@ -20,24 +32,27 @@ void ARDUINO_ISR_ATTR onTimer() {
 
 void setup() {
   Serial.begin(9600);
-  Serial.println(F("BME280 test"));
-  //rtc.setTime(00, 37, 5, 26, 8, 2024); //ESPTime 
-
-  bool status;
-
   // Inicializar sensores
-  status = bme1.begin(0x76) & bme2.begin(0x77);  
-  if (!status) {
+  if ( bme1.begin(0x76) & bme2.begin(0x77)) {
+    if (DEBUG) Serial.println("BME280 sensors in address 0x76 and 0x77 conected");
+  }
+  else{ 
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
     while (1);
   }
-
+  // Conectar a la red WiFi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    if (DEBUG) Serial.print(".");
+  }
+  if (DEBUG) Serial.println("Connected to WiFi");
+  // Sincronizar tiempo
+  syncTime(DEBUG);
   // Set timer frequency to 1Mhz
   timer = timerBegin(1000000);
-
   // Attach onTimer function to our timer.
   timerAttachInterrupt(timer, &onTimer);
-
   // Set alarm to call onTimer function every second (value in microseconds).
   // Repeat the alarm (third parameter) with unlimited count = 0 (fourth parameter).
   timerAlarm(timer, 1000000, true, 0);
@@ -71,4 +86,20 @@ void printValues() {
   Serial.print(",");
   Serial.print(bme2.readHumidity()); // Humedad
   Serial.println(); // Finaliza la línea
+}
+
+void syncTime(bool debug) {
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  if (debug) Serial.println("Waiting for NTP time sync");
+  unsigned long startMillis = millis();
+  while (millis() - startMillis < 10000) {  // Espera hasta 10 segundos para sincronizar
+    if (time(nullptr) > 0) {  // Verifica si se ha sincronizado el tiempo
+      rtc.setTime(time(nullptr)); // Ajusta la hora actual
+      if(debug) Serial.println("Time synced!");
+      return;
+    }
+    delay(500);
+    if (debug) Serial.print(".");
+  }
+  if (debug) Serial.println("Failed to sync time.");
 }
