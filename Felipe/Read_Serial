@@ -1,7 +1,7 @@
 import serial
 import pandas as pd
 import csv
-
+#hola
 sensorData = serial.Serial(port='COM15', baudrate=9600, bytesize=8,
                             parity='N', stopbits=1, timeout=1)
 
